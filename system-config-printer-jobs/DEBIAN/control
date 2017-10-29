@@ -1,0 +1,11 @@
+Package: system-config-printer-jobs
+Version: 1.0.0-1big2
+Depends: system-config-printer
+Architecture: all
+Maintainer: Bruno Goncalves <www.biglinux.com.br>
+Section: admin
+Priority: optional
+Installed-Size:132
+Description: Disable printer applet and add icon to view jobs queue in menu
+
+

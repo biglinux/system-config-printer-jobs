@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Print Queue
+Name[pt]=Fila de Impressão
+Name[pt_BR]=Fila de Impressão
+Name[es]=Cola de impresión
+
+Exec=/usr/share/system-config-printer/system-config-printer-only-jobs.py --show-jobs ok
+Terminal=false
+Type=Application
+Icon=printer
+StartupNotify=true
+X-Desktop-File-Install-Version=0.23
+Categories=System;Settings;HardwareSettings;Printing;GTK;

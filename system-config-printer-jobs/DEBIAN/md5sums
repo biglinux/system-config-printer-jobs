@@ -1,0 +1,7 @@
+e8947642806c1cdc834b39f35941bb9c  DEBIAN/control
+d41d8cd98f00b204e9800998ecf8427e  DEBIAN/md5sums
+7298a61105372f4dfed98e1e0a5d8ac2  DEBIAN/dpkg-divert
+a1a505db011b359f6dcf5a7eb8b90189  DEBIAN/postrm
+defd12e29a218059d3770f8a9f78c061  DEBIAN/preinst
+9aaa6b626ff153c67faf6e28e1219c93  usr/share/applications/system-config-printer-only-jobs.desktop
+81ee6210ee821f70d7ba2216ad8c987d  usr/share/system-config-printer/system-config-printer-only-jobs.py
