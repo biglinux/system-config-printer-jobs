@@ -5,11 +5,16 @@ mkdir -p "/usr/share/dpkgdivert/system-config-printer-jobs"
 case "$1" in
   install)
     dpkg-divert --package "$package_name" --divert "/usr/share/dpkgdivert/system-config-printer-jobs/etcxdgautostartprint-applet.desktop" --rename "/etc/xdg/autostart/print-applet.desktop"
+    dpkg-divert --package "$package_name" --divert "/usr/share/dpkgdivert/system-config-printer-jobs/usrshareapplicationssystem-config-printer.desktop" --rename "/usr/share/applications/system-config-printer.desktop"
     ;;
   upgrade)
 if [ "$(dpkg-divert --list "/etc/xdg/autostart/print-applet.desktop")" = "" ]
 then
     dpkg-divert --package "$package_name" --divert "/usr/share/dpkgdivert/system-config-printer-jobs/etcxdgautostartprint-applet.desktop" --rename "/etc/xdg/autostart/print-applet.desktop"
+fi
+if [ "$(dpkg-divert --list "/usr/share/applications/system-config-printer.desktop")" = "" ]
+then
+    dpkg-divert --package "$package_name" --divert "/usr/share/dpkgdivert/system-config-printer-jobs/usrshareapplicationssystem-config-printer.desktop" --rename "/usr/share/applications/system-config-printer.desktop"
 fi
 ;;
 esac
