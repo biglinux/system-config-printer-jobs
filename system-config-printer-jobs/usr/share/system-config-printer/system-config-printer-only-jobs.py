@@ -27,14 +27,19 @@ import config
 import sys, os, time, re
 import _thread
 import dbus
+import gi
 try:
+    gi.require_version('Polkit', '1.0')
     from gi.repository import Polkit
 except:
     Polkit = False
 
+gi.require_version('GdkPixbuf', '2.0')
 from gi.repository import GdkPixbuf
 try:
+    gi.require_version('Gdk', '3.0')
     from gi.repository import Gdk
+    gi.require_version('Gtk', '3.0')
     from gi.repository import Gtk
     Gtk.init (sys.argv)
 except RuntimeError as e:
@@ -48,6 +53,7 @@ def show_help():
            "Options:\n\n"
            "  --debug                 Enable debugging output.\n"
            "  --show-jobs <printer>   Show the print queue for <printer>\n"
+           "  --embedded              Enable to start in Embedded mode.\n "
            "  --help                  Show this message.\n")
 
 if len(sys.argv)>1 and sys.argv[1] == '--help':
@@ -95,6 +101,12 @@ pkgdata = config.pkgdatadir
 iconpath = os.path.join (pkgdata, 'icons/')
 sys.path.append (pkgdata)
 
+PlugWindow = None
+PlugWindowId = None
+
+#set program name
+GLib.set_prgname("system-config-printer")
+
 def CUPS_server_hostname ():
     host = cups.getServer ()
     if host[0] == '/':
@@ -102,9 +114,7 @@ def CUPS_server_hostname ():
     return host
 
 class ServiceStart:
-    NAME="org.fedoraproject.Config.Services"
-    PATH="/org/fedoraproject/Config/Services/ServiceHerders/SysVServiceHerder/Services/cups"
-    IFACE="org.fedoraproject.Config.Services.SysVService"
+
     def _get_iface (self, iface):
         bus = dbus.SystemBus ()
         obj = bus.get_object (self.NAME, self.PATH)
@@ -114,16 +124,38 @@ class ServiceStart:
     def can_start (self):
         try:
             proxy = self._get_iface (dbus.INTROSPECTABLE_IFACE)
-            introspect = proxy.Introspect ()
+            introspect = proxy.Introspect()
         except:
             return False
-
         return True
 
-    def start (self, reply_handler, error_handler):
-        proxy = self._get_iface (self.IFACE)
-        proxy.start (reply_handler=reply_handler,
-                     error_handler=error_handler)
+    def start(self, reply_handler, error_handler):
+        proxy = self._get_iface(self.IFACE)
+        self._start(proxy, reply_handler, error_handler)
+
+
+class SysVServiceStart(ServiceStart):
+    NAME="org.fedoraproject.Config.Services"
+    PATH="/org/fedoraproject/Config/Services/ServiceHerders/SysVServiceHerder/Services/cups"
+    IFACE="org.fedoraproject.Config.Services.SysVService"
+
+    def _start(self, proxy, reply_handler, error_handler):
+        proxy.start(reply_handler=reply_handler,
+                    error_handler=error_handler)
+
+
+class SystemDServiceStart(ServiceStart):
+    NAME="org.freedesktop.systemd1"
+    PATH="/org/freedesktop/systemd1"
+    IFACE="org.freedesktop.systemd1.Manager"
+    CUPS_SERVICE="org.cups.cupsd.service"
+
+    def _start(self, proxy, reply_handler, error_handler):
+        proxy.StartUnit(self.CUPS_SERVICE, 'fail',
+                        reply_handler=reply_handler,
+                        error_handler=error_handler)
+
+
 
 class GUI(GtkGUI):
 
@@ -200,6 +232,16 @@ class GUI(GtkGUI):
 
                         domain=config.PACKAGE)
 
+        if PlugWindowId:
+            self.PrintersWindow.hide()
+            # the "vbox4" widget
+            vbox = self.PrintersWindow.get_children()[0]
+            PlugWindow = Gtk.Plug.new(PlugWindowId)
+            Gtk.Container.remove(self.PrintersWindow, vbox)
+            PlugWindow.add(vbox)
+            self.PrintersWindow.set_transient_for(PlugWindow)
+            PlugWindow.show_all()
+            self.PrintersWindow = PlugWindow
 
         # Since some dialogs are reused we can't let the delete-event's
         # default handler destroy them
@@ -218,7 +260,7 @@ class GUI(GtkGUI):
                 pass # Maybe cups-pk-helper isn't installed.
 
         self.unlock_button = Gtk.LockButton ()
-        if self.edit_permission != None:
+        if self.edit_permission is not None:
             self.edit_permission.connect ("notify::allowed",
                                           self.polkit_permission_changed)
 
@@ -426,7 +468,10 @@ class GUI(GtkGUI):
         menu.show_all ()
         self.search_entry.set_drop_down_menu (menu)
 
-        self.servicestart = ServiceStart ()
+        if os.path.exists("/usr/lib/systemd"):
+            self.servicestart = SystemDServiceStart()
+        else:
+            self.servicestart = SysVServiceStart()
 
         # Setup icon view
         self.mainlist = Gtk.ListStore(GObject.TYPE_PYOBJECT,    # Object
@@ -494,7 +539,7 @@ class GUI(GtkGUI):
     def display_properties_dialog_for (self, queue):
         model = self.dests_iconview.get_model ()
         iter = model.get_iter_first ()
-        while iter != None:
+        while iter is not None:
             name = model.get_value (iter, 2)
             if name == queue:
                 path = model.get_path (iter)
@@ -505,7 +550,7 @@ class GUI(GtkGUI):
                 break
             iter = model.iter_next (iter)
 
-        if iter == None:
+        if iter is None:
             raise RuntimeError
 
     def setup_toolbar_for_search_entry (self):
@@ -605,7 +650,7 @@ class GUI(GtkGUI):
 
         userdef = userdefault.UserDefaultPrinter ().get ()
         if (n != 1 or
-            (userdef == None and self.default_printer == name)):
+            (userdef is None and self.default_printer == name)):
             set_default_sensitivity = False
         else:
             set_default_sensitivity = True
@@ -643,7 +688,7 @@ class GUI(GtkGUI):
             click_path = iconview.get_path_at_pos (int (event.x),
                                                    int (event.y))
             paths = iconview.get_selected_items ()
-            if click_path == None:
+            if click_path is None:
                 iconview.unselect_all ()
             elif click_path not in paths:
                 iconview.unselect_all ()
@@ -653,7 +698,7 @@ class GUI(GtkGUI):
                     if type (cell) == Gtk.CellRendererText:
                         break
                 iconview.set_cursor (click_path, cell, False)
-            self.printer_context_menu.popup_for_device (None, None, None, None, 
+            self.printer_context_menu.popup_for_device (None, None, None, None,
                                              None, event.button, event.time)
         return False
 
@@ -842,19 +887,19 @@ class GUI(GtkGUI):
 
             if self.current_filter_mode == "filter-name":
                 for name in printers_set.keys ():
-                    if pattern.search (name) != None:
+                    if pattern.search (name) is not None:
                         printers_subset[name] = printers_set[name]
             elif self.current_filter_mode == "filter-description":
                 for name, printer in printers_set.items ():
-                    if pattern.search (printer.info) != None:
+                    if pattern.search (printer.info) is not None:
                         printers_subset[name] = printers_set[name]
             elif self.current_filter_mode == "filter-location":
                 for name, printer in printers_set.items ():
-                    if pattern.search (printer.location) != None:
+                    if pattern.search (printer.location) is not None:
                         printers_subset[name] = printers_set[name]
             elif self.current_filter_mode == "filter-manufacturer":
                 for name, printer in printers_set.items ():
-                    if pattern.search (printer.make_and_model) != None:
+                    if pattern.search (printer.make_and_model) is not None:
                         printers_subset[name] = printers_set[name]
             else:
                 nonfatalException ()
@@ -906,7 +951,7 @@ class GUI(GtkGUI):
                               'i-network-printer'),
                          'smb-printer':
                              (_("Network print share"),
-                              'printer'),
+                              'i-network-printer'),
                          'network-printer':
                              (_("Network printer"),
                               'i-network-printer'),
@@ -929,14 +974,23 @@ class GUI(GtkGUI):
                     type = 'local-class'
                 else:
                     (scheme, rest) = urllib.parse.splittype (object.device_uri)
-                    if scheme == 'ipp':
-                        type = 'ipp-printer'
+                    if scheme in ['ipp', 'ipps']:
+                        if rest.startswith("//localhost"): # IPP-over-USB
+                            type = 'local-printer'
+                        else: # IPP network printer
+                            type = 'ipp-printer'
                     elif scheme == 'smb':
                         type = 'smb-printer'
                     elif scheme == 'hpfax':
                         type = 'local-fax'
-                    elif scheme in ['socket', 'lpd']:
+                    elif scheme in ['socket', 'lpd', 'dnssd']:
                         type = 'network-printer'
+                    elif object.device_uri.startswith('hp:/net/'):
+                        type = 'network-printer'
+                    elif object.device_uri.startswith('hpfax:/net/'):
+                        type = 'network-printer'
+                    elif scheme == 'implicitclass': # cups-browsed-discovered
+                        type = 'discovered-printer'
 
                 (tip, icon) = PRINTER_TYPE[type]
                 (result, w, h) = Gtk.icon_size_lookup (Gtk.IconSize.DIALOG)
@@ -953,7 +1007,7 @@ class GUI(GtkGUI):
                         except GLib.GError:
                             pass
 
-                    if pixbuf == None:
+                    if pixbuf is None:
                         try:
                             pixbuf = theme.load_icon ('printer', w, 0)
                         except:
@@ -982,7 +1036,7 @@ class GUI(GtkGUI):
                             continue
 
                         r = statereason.StateReason (object.name, reason)
-                        if worst_reason == None:
+                        if worst_reason is None:
                             worst_reason = r
                         elif r > worst_reason:
                             worst_reason = r
@@ -1025,7 +1079,9 @@ class GUI(GtkGUI):
                     try:
                         other_emblem = theme.load_icon (emblem, w/2, 0)
                         copy = pixbuf.copy ()
-                        other_emblem.composite (copy, 0, 0,
+                        other_emblem.composite (copy,
+                                                copy.get_width () / 2,
+                                                copy.get_height () / 2,
                                                 other_emblem.get_width (),
                                                 other_emblem.get_height (),
                                                 copy.get_width () / 2,
@@ -1251,7 +1307,7 @@ class GUI(GtkGUI):
     # refresh
 
     def on_btnRefresh_clicked(self, button):
-        if self.cups == None:
+        if self.cups is None:
             try:
                 self.cups = authconn.Connection(self.PrintersWindow)
             except RuntimeError:
@@ -1370,11 +1426,11 @@ class GUI(GtkGUI):
 
     def on_rename_activate(self, *UNUSED):
         tuple = self.dests_iconview.get_cursor ()
-        if tuple == None:
+        if tuple is None:
             return
 
         (res, path, cell) = tuple
-        if path == None:
+        if path is None:
             # Printer removed?
             return
 
@@ -1732,7 +1788,7 @@ class GUI(GtkGUI):
             self.cups._end_operation ()
 
         if success and share:
-            if self.server_is_publishing == None:
+            if self.server_is_publishing is None:
                 # We haven't yet seen a server-is-sharing-printers attribute.
                 # Assuming CUPS 1.4, this means we haven't opened a
                 # properties dialog yet.  Fetch the attributes now and
@@ -1795,7 +1851,7 @@ class GUI(GtkGUI):
         out_model = self.newPrinterGUI.tvNCNotMembers.get_model ()
         in_model = self.newPrinterGUI.tvNCMembers.get_model ()
         iter = out_model.get_iter_first ()
-        while iter != None:
+        while iter is not None:
             next = out_model.iter_next (iter)
             data = out_model.get (iter, 0)
             if data[0] in class_members:
@@ -1942,7 +1998,7 @@ class GUI(GtkGUI):
         # Now select it.
         model = self.dests_iconview.get_model ()
         iter = model.get_iter_first ()
-        while iter != None:
+        while iter is not None:
             queue = model.get_value (iter, 2)
             if queue == name:
                 path = model.get_path (iter)
@@ -2111,7 +2167,7 @@ class GUI(GtkGUI):
             # the new PPD (see bug #441836).
             try:
                 option = self.propertiesDlg.server_side_options['media']
-                if option.get_current_value () == None:
+                if option.get_current_value () is None:
                     debugprint ("Invalid media option: resetting")
                     option.reset ()
                     self.propertiesDlg.changed.add (option)
@@ -2186,7 +2242,8 @@ if __name__ == "__main__":
     import getopt
     try:
         opts, args = getopt.gnu_getopt (sys.argv[1:], '',
-                                        ['debug', 'show-jobs='])
+                                        ['embedded=',
+                                            'debug', 'show-jobs='])
     except getopt.GetoptError:
         show_help ()
         sys.exit (1)
@@ -2199,5 +2256,8 @@ if __name__ == "__main__":
             cupshelpers.set_debugprint_fn (debugprint)
         elif opt == '--show-jobs':
             show_jobs = optarg
+
+        if opt == "--embedded":
+            PlugWindowId = int(optarg)
 
     main(show_jobs)
