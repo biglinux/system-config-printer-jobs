@@ -1,8 +1,33 @@
 [Desktop Entry]
 Name=Print Queue
+Name[bg]=Опашка за печат
+Name[cs]=Tisková fronta
+Name[da]=Udskriftskøen
+Name[de]=Druckwarteschlange
+Name[el]=Ουρά εκτύπωσης
+Name[es]=Cola de impresión
+Name[et]=Prindi järjekord
+Name[fi]=Tulostusjono
+Name[fr]=File d’attente d’impression
+Name[he]=תור הדפסה
+Name[hr]=Ispiši red čekanja
+Name[hu]=Nyomtatási sor
+Name[is]=Prenta biðröð
+Name[it]=Coda di stampa
+Name[ja]=印刷キュー
+Name[ko]=인쇄 대기열
+Name[nl]=Afdrukwachtrij
+Name[no]=Utskriftskøen
+Name[pl]=Kolejka wydruku
 Name[pt]=Fila de Impressão
 Name[pt_BR]=Fila de Impressão
-Name[es]=Cola de impresión
+Name[ro]=Coadă de imprimare
+Name[ru]=Очередь печати
+Name[sk]=Tlačový front
+Name[sv]=Utskriftskö
+Name[tr]=Yazdırma Kuyruğu
+Name[uk]=Черга друку
+Name[zh]=打印队列
 
 Exec=/usr/share/system-config-printer/system-config-printer-only-jobs.py --show-jobs ok
 Terminal=false
